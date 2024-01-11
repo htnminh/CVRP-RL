@@ -253,42 +253,36 @@ class Delivery(gymnasium.Env):
     
 
     def step(self, action):
-        observation = self.observation
-        info = self.info
-        # print('action', action)
-        # pprint(observation)
-
         assert self.action_space.contains(action), f"Invalid action {action}"
-        assert observation['visited'][action] == 0, f"Stop {action} has already been visited"
+        assert self.observation['visited'][action] == 0, f"Stop {action} has already been visited"
 
-         
         # move to next stop
+        self.observation['current_length'] += int(euclidean(
+            self.observation['coord'][self.observation['current_stop']], self.observation['coord'][action]))
         if action != 0:
-            observation['visited'][action] = 1
-        observation['current_length'] += int(euclidean(observation['coord'][observation['current_stop']], observation['coord'][action]))
-        observation['current_load'] -= observation['demand'][action]
-        assert observation['current_load'] >= 0, f"Current load cannot be negative"
-        observation['current_stop'] = action
-
+            self.observation['visited'][action] = 1
+        self.observation['current_load'] -= self.observation['demand'][action]
+        assert self.observation['current_load'] >= 0, f"Current load cannot be negative"
+        self.observation['current_stop'] = action
 
         # reset load if back to depot
-        if observation['current_stop'] == 0:
-            observation['current_load'] = self.ortools_data['vehicle_caps'][0]
+        if self.observation['current_stop'] == 0:
+            self.observation['current_load'] = self.ortools_data['vehicle_caps'][0]
 
         # check if done
-        if np.sum(observation['visited']) == self.n_stops - 1 and observation['current_stop'] == 0:
-            reward = -observation['current_length']
+        if np.sum(self.observation['visited']) == self.n_stops - 1 and self.observation['current_stop'] == 0:
+            reward = -self.observation['current_length']
             terminated = True
         else:
             reward = 0
             terminated = False
         
         return (
-            observation,
+            self.observation,
             reward,
             terminated,
             False, # truncated (bool) – Whether the truncation condition outside the scope of the MDP is satisfied.
-            info
+            self.info
         )
     
 
