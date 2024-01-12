@@ -14,6 +14,9 @@ from ortools.constraint_solver import pywrapcp
 import gymnasium
 from gymnasium import spaces
 
+from stable_baselines3 import DQN
+
+
 
 class Delivery(gymnasium.Env):
     def __init__(self, n_stops=10, max_demand=10, max_vehicle_cap=30, max_env_size=1_000_000,
@@ -212,7 +215,8 @@ class Delivery(gymnasium.Env):
 
 
     def reset(self):
-        super().reset(seed=self.gym_seed)
+        # super().reset(seed=self.gym_seed)
+        super().reset()
 
         info = dict()
 
@@ -330,6 +334,24 @@ if __name__ == "__main__":
     delivery.step(0)
 
     pprint(delivery.observation)
+    del delivery
+
+
+    delivery = Delivery(n_stops=15)
+    # model = DQN("MlpPolicy", delivery, verbose=1)
+    model = DQN("MultiInputPolicy", delivery, verbose=1)
+    model.learn(total_timesteps=100, log_interval=4)
+    model.save("dqn_delivery")
+    model = DQN.load("dqn_delivery")
+    observation, info = delivery.reset()
+    while True:
+        action, _states = model.predict(observation, deterministic=True)
+        observation, reward, terminated, truncated, info = delivery.step(action)
+        if terminated or truncated:
+            break
+
+
+
 
 
 
