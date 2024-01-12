@@ -27,3 +27,12 @@
             'current_stop': spaces.Discrete(self.n_stops, seed=gym_seed)
         })  # visited of stop 0 should always be 0
         self.reward_range = (-np.inf, 0)
+
+observation = dict(
+            coord=self.other_data['stops_coords'].astype(int),
+            demand=self.ortools_data['demands'].astype(int),
+            visited=np.zeros(self.n_stops).astype(int),
+            current_load=np.array([self.ortools_data['vehicle_caps'][0], ], dtype=int),
+            current_stop=0,
+            current_length=np.array([0, ], dtype=int)
+        )

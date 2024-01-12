@@ -1,5 +1,6 @@
 from pprint import pprint, pformat
 from typing import Any, SupportsFloat
+import tqdm
 
 import numpy as np
 from numpy.random import randint
@@ -14,7 +15,10 @@ from ortools.constraint_solver import pywrapcp
 import gymnasium
 from gymnasium import spaces
 
-from stable_baselines3 import DQN
+from stable_baselines3 import DQN, A2C
+
+import torch
+from torch import tensor
 
 
 
@@ -214,9 +218,14 @@ class Delivery(gymnasium.Env):
             plt.show()
 
 
-    def reset(self):
+    def reset(self, seed=None):
         # super().reset(seed=self.gym_seed)
-        super().reset()
+        
+        # this seed is used to fix compatibility problems between gymnasium and stable-baselines3
+        if seed is not None:
+            super().reset(seed=seed)
+        else:
+            super().reset()
 
         info = dict()
 
@@ -224,63 +233,89 @@ class Delivery(gymnasium.Env):
         self.observation_space = spaces.Dict({
             'coord': spaces.Box(
                 low=0, high=self.max_env_size,
-                shape=(self.n_stops, 2), dtype=np.int32,
+                shape=(self.n_stops, 2), dtype=int,
                 seed=self.gym_seed),
             'demand': spaces.Box(
                 low=0, high=self.max_demand,
-                shape=(self.n_stops, ), dtype=np.int32,
+                shape=(self.n_stops, ), dtype=int,
                 seed=self.gym_seed),
             'visited': spaces.MultiBinary(self.n_stops, seed=self.gym_seed),
                 # visited of stop 0 should always be 0
             'current_load': spaces.Box(
                 low=0, high=self.max_vehicle_cap,
-                shape=(1, ), dtype=np.int32,
+                shape=(1, ), dtype=int,
                 seed=self.gym_seed),
             'current_stop': spaces.Discrete(self.n_stops, seed=self.gym_seed),
             'current_length': spaces.Box(
                 low=0, high=np.inf,
-                shape=(1, ), dtype=np.int32,
+                shape=(1, ), dtype=int,
                 seed=self.gym_seed)
         })
         self.reward_range = (-np.inf, 0)
 
         observation = dict(
-            coord=self.other_data['stops_coords'].astype('int32'),
-            demand=self.ortools_data['demands'].astype('int32'),
-            current_load=self.ortools_data['vehicle_caps'][0],
-            visited=np.zeros(self.n_stops).astype('int32'),
+            coord=self.other_data['stops_coords'].astype(int),
+            demand=self.ortools_data['demands'].astype(int),
+            visited=np.zeros(self.n_stops).astype(int),
+            current_load=np.array([self.ortools_data['vehicle_caps'][0], ], dtype=int),
             current_stop=0,
-            current_length=0
+            current_length=np.array([0, ], dtype=int)
         )
+        info['n_routes_redundant'] = 0
+
+        self.observation = observation
+        self.info = info
         
         return observation, info
     
 
     def step(self, action):
         assert self.action_space.contains(action), f"Invalid action {action}"
-        assert self.observation['visited'][action] == 0, f"Stop {action} has already been visited"
+        self.info['n_routes_redundant'] += 1
 
-        # move to next stop
-        self.observation['current_length'] += int(euclidean(
-            self.observation['coord'][self.observation['current_stop']], self.observation['coord'][action]))
-        if action != 0:
-            self.observation['visited'][action] = 1
-        self.observation['current_load'] -= self.observation['demand'][action]
-        assert self.observation['current_load'] >= 0, f"Current load cannot be negative"
-        self.observation['current_stop'] = action
-
-        # reset load if back to depot
-        if self.observation['current_stop'] == 0:
-            self.observation['current_load'] = self.ortools_data['vehicle_caps'][0]
-
-        # check if done
-        if np.sum(self.observation['visited']) == self.n_stops - 1 and self.observation['current_stop'] == 0:
-            reward = -self.observation['current_length']
-            terminated = True
-        else:
-            reward = 0
+        INVALID_REWARD = - 2 * self.n_stops * self.max_env_size
+ 
+        if self.observation['visited'][action] != 0:
+            # print(f"Stop {action} has already been visited")
+            self.observation['current_length'] += 2 * self.max_env_size
+            reward = INVALID_REWARD
             terminated = False
+        elif self.observation['current_load'] < self.observation['demand'][action]:
+            # print(f"Current load cannot be negative")
+            self.observation['current_length'] += 2 * self.max_env_size
+            reward = INVALID_REWARD
+            terminated = False
+        else:
+            # move to next stop
+            self.observation['current_length'] += int(euclidean(
+                self.observation['coord'][self.observation['current_stop']], self.observation['coord'][action]))
+            if action != 0:
+                self.observation['visited'][action] = 1
+            self.observation['current_load'] -= self.observation['demand'][action]
+            self.observation['current_stop'] = action
+
+            # reset load if back to depot
+            if self.observation['current_stop'] == 0:
+                self.observation['current_load'] = np.array([self.ortools_data['vehicle_caps'][0], ], dtype=int)
+
+            reward = -self.observation['current_length']
+
+            # check if done
+            if np.sum(self.observation['visited']) == self.n_stops - 1 and self.observation['current_stop'] == 0:
+                print(f'TERMINATED: {self.observation["current_length"]} after {self.info["n_routes_redundant"]}')
+                terminated = True
+                self.reset()
+            else:
+                terminated = False
         
+
+        # check and print observation belongs to spaces in detail of each key
+        # for key in self.observation.keys():
+        #     assert self.observation_space[key].contains(self.observation[key]), f"Invalid observation {key}: {self.observation[key]}"
+
+        # # check and print reward belongs to reward range
+        # assert self.reward_range[0] <= reward <= self.reward_range[1], f"Invalid reward {reward}"
+
         return (
             self.observation,
             reward,
@@ -289,6 +324,14 @@ class Delivery(gymnasium.Env):
             self.info
         )
     
+    @staticmethod
+    def convert_observation_to_tensor(observation: dict):
+        res = observation.copy()
+        for key in res.keys():
+            res[key] = tensor(res[key])
+        return res
+
+
 
 if __name__ == "__main__":
     # delivery = Delivery(n_stops=10)
@@ -302,6 +345,7 @@ if __name__ == "__main__":
     # pprint(delivery.get_ortools_solution(time_limit_seconds=1))
     # pprint(delivery.visualize_ortools_solution(time_limit_seconds=1))
 
+    """ 
     delivery = Delivery(n_stops=15, gen_seed=42, gym_seed=42)
     delivery.visualize()
     pprint(solution := delivery.get_ortools_solution(time_limit_seconds=10))
@@ -335,8 +379,10 @@ if __name__ == "__main__":
 
     pprint(delivery.observation)
     del delivery
+    """
 
 
+    """
     delivery = Delivery(n_stops=15)
     # model = DQN("MlpPolicy", delivery, verbose=1)
     model = DQN("MultiInputPolicy", delivery, verbose=1)
@@ -349,7 +395,33 @@ if __name__ == "__main__":
         observation, reward, terminated, truncated, info = delivery.step(action)
         if terminated or truncated:
             break
+"""
+    
+    delivery = Delivery(n_stops=15, max_env_size=1000)
 
+    observation, info = delivery.reset()
+    model = A2C("MultiInputPolicy", delivery, verbose=1)
+    model.learn(total_timesteps=10_000, progress_bar=True)
+    model.save("a2c_delivery")
+    model = A2C.load("a2c_delivery")
+
+    observation, info = delivery.reset()
+    actions = []
+    while True:
+        action, _states = model.predict(observation, deterministic=False)
+        actions.append(action)
+        observation, reward, terminated, truncated, info = delivery.step(action)
+        pprint(delivery.observation)
+        if terminated or truncated:
+            break
+    print([int(action) for action in actions])
+    
+    # print filtered actions
+    filtered_actions = []
+    for action in actions:
+        if action not in filtered_actions:
+            filtered_actions.append(action)
+    print([int(action) for action in filtered_actions])
 
 
 
