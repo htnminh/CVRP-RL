@@ -1,6 +1,7 @@
 from pprint import pprint, pformat
 from typing import Any, SupportsFloat
 import tqdm
+import time
 
 import numpy as np
 from numpy.random import randint
@@ -15,7 +16,7 @@ from ortools.constraint_solver import pywrapcp
 import gymnasium
 from gymnasium import spaces
 
-from stable_baselines3 import DQN, A2C
+from stable_baselines3 import DQN, A2C, PPO
 
 import torch
 from torch import tensor
@@ -251,7 +252,8 @@ class Delivery(gymnasium.Env):
                 shape=(1, ), dtype=int,
                 seed=self.gym_seed)
         })
-        self.reward_range = (-np.inf, 0)
+        # self.reward_range = (-np.inf, 0)
+        self.reward_range = (-np.inf, np.inf)
 
         observation = dict(
             coord=self.other_data['stops_coords'].astype(int),
@@ -273,16 +275,22 @@ class Delivery(gymnasium.Env):
         assert self.action_space.contains(action), f"Invalid action {action}"
         self.info['n_routes_redundant'] += 1
 
-        INVALID_REWARD = - 2 * self.n_stops * self.max_env_size
+        INVALID_REWARD = - 2 * self.n_stops
+        # INVALID_REWARD = 2 * self.n_stops * self.max_env_size
  
         if self.observation['visited'][action] != 0:
             # print(f"Stop {action} has already been visited")
-            self.observation['current_length'] += 2 * self.max_env_size
+            # self.observation['current_length'] += 2 * self.max_env_size
             reward = INVALID_REWARD
             terminated = False
         elif self.observation['current_load'] < self.observation['demand'][action]:
             # print(f"Current load cannot be negative")
-            self.observation['current_length'] += 2 * self.max_env_size
+            # self.observation['current_length'] += 2 * self.max_env_size
+            reward = INVALID_REWARD
+            terminated = False
+        elif self.observation['current_stop'] == 0 and action == 0:
+            # print(f"Cannot stay in depot")
+            # self.observation['current_length'] += 2 * self.max_env_size
             reward = INVALID_REWARD
             terminated = False
         else:
@@ -298,7 +306,8 @@ class Delivery(gymnasium.Env):
             if self.observation['current_stop'] == 0:
                 self.observation['current_load'] = np.array([self.ortools_data['vehicle_caps'][0], ], dtype=int)
 
-            reward = -self.observation['current_length']
+            reward = -self.observation['current_length'] / self.max_env_size
+            # reward = self.observation['current_length']
 
             # check if done
             if np.sum(self.observation['visited']) == self.n_stops - 1 and self.observation['current_stop'] == 0:
@@ -396,9 +405,11 @@ if __name__ == "__main__":
         if terminated or truncated:
             break
 """
-    
-    delivery = Delivery(n_stops=15, max_env_size=1000)
+    delivery = Delivery(n_stops=15, gen_seed=42, gym_seed=42, max_env_size=1000)
+    pprint(delivery.get_ortools_solution(time_limit_seconds=10))
+    input('Enter to continue...')
 
+    # a2c
     observation, info = delivery.reset()
     model = A2C("MultiInputPolicy", delivery, verbose=1)
     model.learn(total_timesteps=10_000, progress_bar=True)
@@ -411,75 +422,79 @@ if __name__ == "__main__":
         action, _states = model.predict(observation, deterministic=False)
         actions.append(action)
         observation, reward, terminated, truncated, info = delivery.step(action)
-        pprint(delivery.observation)
+        # pprint(delivery.observation)
         if terminated or truncated:
             break
     print([int(action) for action in actions])
     
-    # print filtered actions
     filtered_actions = []
     for action in actions:
         if action not in filtered_actions:
             filtered_actions.append(action)
+        elif action == 0 and filtered_actions[-1] != 0:
+            filtered_actions.append(action)
+        
+    print([int(action) for action in filtered_actions])
+    time.sleep(3)
+    input('Enter to continue...')
+
+
+    # dqn
+    observation, info = delivery.reset()
+    model = DQN("MultiInputPolicy", delivery, verbose=1, learning_rate=0.01)
+    model.learn(total_timesteps=100_000, progress_bar=True)
+    model.save("dqn_delivery")
+    model = DQN.load("dqn_delivery")
+
+    observation, info = delivery.reset()
+    actions = []
+    while True:
+        action, _states = model.predict(observation, deterministic=False)
+        actions.append(action)
+        observation, reward, terminated, truncated, info = delivery.step(action)
+        # pprint(delivery.observation)
+        if terminated or truncated:
+            break
+    print([int(action) for action in actions])
+    
+    filtered_actions = []
+    for action in actions:
+        if action not in filtered_actions:
+            filtered_actions.append(action)
+        elif action == 0 and filtered_actions[-1] != 0:
+            filtered_actions.append(action)
+        
+    print([int(action) for action in filtered_actions])
+    input('Enter to continue...')
+
+
+    # ppo
+    observation, info = delivery.reset()
+    model = PPO("MultiInputPolicy", delivery, verbose=1, learning_rate=0.01)
+    model.learn(total_timesteps=100_000, progress_bar=True)
+    model.save("ppo_delivery")
+    model = PPO.load("ppo_delivery")
+
+    observation, info = delivery.reset()
+    actions = []
+    while True:
+        action, _states = model.predict(observation, deterministic=False)
+        actions.append(action)
+        observation, reward, terminated, truncated, info = delivery.step(action)
+        # pprint(delivery.observation)
+        if terminated or truncated:
+            break
+    print([int(action) for action in actions])
+
+    filtered_actions = []
+    for action in actions:
+        if action not in filtered_actions:
+            filtered_actions.append(action)
+        elif action == 0 and filtered_actions[-1] != 0:
+            filtered_actions.append(action)
+
     print([int(action) for action in filtered_actions])
 
 
 
 
-
-"""
-Solving with time limit of 10 seconds
-{'objective': 8302569,
- 'routes': [{'distance': 1689163,
-             'segments': [{'index': 0, 'load': 0},
-                          {'index': 2, 'load': 1},
-                          {'index': 11, 'load': 10},
-                          {'index': 13, 'load': 15},
-                          {'index': 0, 'load': 15}]},
-            {'distance': 1362162,
-             'segments': [{'index': 0, 'load': 0},
-                          {'index': 8, 'load': 3},
-                          {'index': 9, 'load': 10},
-                          {'index': 10, 'load': 14},
-                          {'index': 0, 'load': 14}]},
-            {'distance': 0,
-             'segments': [{'index': 0, 'load': 0}, {'index': 0, 'load': 0}]},
-            {'distance': 0,
-             'segments': [{'index': 0, 'load': 0}, {'index': 0, 'load': 0}]},
-            {'distance': 0,
-             'segments': [{'index': 0, 'load': 0}, {'index': 0, 'load': 0}]},
-            {'distance': 0,
-             'segments': [{'index': 0, 'load': 0}, {'index': 0, 'load': 0}]},
-            {'distance': 0,
-             'segments': [{'index': 0, 'load': 0}, {'index': 0, 'load': 0}]},
-            {'distance': 0,
-             'segments': [{'index': 0, 'load': 0}, {'index': 0, 'load': 0}]},
-            {'distance': 0,
-             'segments': [{'index': 0, 'load': 0}, {'index': 0, 'load': 0}]},
-            {'distance': 0,
-             'segments': [{'index': 0, 'load': 0}, {'index': 0, 'load': 0}]},
-            {'distance': 1627774,
-             'segments': [{'index': 0, 'load': 0},
-                          {'index': 7, 'load': 10},
-                          {'index': 0, 'load': 10}]},
-            {'distance': 2414568,
-             'segments': [{'index': 0, 'load': 0},
-                          {'index': 5, 'load': 9},
-                          {'index': 6, 'load': 10},
-                          {'index': 14, 'load': 13},
-                          {'index': 12, 'load': 16},
-                          {'index': 0, 'load': 16}]},
-            {'distance': 0,
-             'segments': [{'index': 0, 'load': 0}, {'index': 0, 'load': 0}]},
-            {'distance': 1084634,
-             'segments': [{'index': 0, 'load': 0},
-                          {'index': 4, 'load': 6},
-                          {'index': 1, 'load': 11},
-                          {'index': 0, 'load': 11}]},
-            {'distance': 124268,
-             'segments': [{'index': 0, 'load': 0},
-                          {'index': 3, 'load': 10},
-                          {'index': 0, 'load': 10}]}],
- 'total_distance': 8302569,
- 'total_load': 76}
-"""
