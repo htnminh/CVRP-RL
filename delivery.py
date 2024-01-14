@@ -19,7 +19,7 @@ from ortools.constraint_solver import pywrapcp
 import gymnasium
 from gymnasium import spaces
 
-from stable_baselines3 import DQN, A2C, PPO
+from stable_baselines3 import DQN, A2C, PPO, SAC, TD3, DDPG, HerReplayBuffer
 
 import torch
 from torch import tensor
@@ -474,6 +474,7 @@ if __name__ == "__main__":
     # initialization
     N_STOPS = 15
     N_MOVE_THRESHOLD = N_STOPS * 10
+    TOTAL_TIMESTEPS = 1_000
 
     print('='*25 + 'Initialization' + '='*25)
     delivery = Delivery(n_stops=N_STOPS, gen_seed=42, gym_seed=42, max_env_size=1000)
@@ -549,7 +550,7 @@ Solving with time limit of 10 seconds
     print('='*25 + 'A2C' + '='*25)
     observation, info = delivery.reset()
     model = A2C("MultiInputPolicy", delivery, verbose=1)
-    model.learn(total_timesteps=10_000, progress_bar=True)
+    model.learn(total_timesteps=TOTAL_TIMESTEPS, progress_bar=True)
     last_solution_info = delivery.last_solution_info.copy()
     model.save("a2c_delivery")
     model = A2C.load("a2c_delivery")
@@ -582,7 +583,7 @@ Solving with time limit of 10 seconds
     print('='*25 + 'DQN' + '='*25)
     observation, info = delivery.reset()
     model = DQN("MultiInputPolicy", delivery, verbose=1, learning_rate=0.01)
-    model.learn(total_timesteps=10_000, progress_bar=True)
+    model.learn(total_timesteps=TOTAL_TIMESTEPS, progress_bar=True)
     last_solution_info = delivery.last_solution_info.copy()
     model.save("dqn_delivery")
     model = DQN.load("dqn_delivery")
@@ -616,7 +617,7 @@ Solving with time limit of 10 seconds
     print('='*25 + 'PPO' + '='*25)
     observation, info = delivery.reset()
     model = PPO("MultiInputPolicy", delivery, verbose=1, learning_rate=0.01)
-    model.learn(total_timesteps=10_000, progress_bar=True)
+    model.learn(total_timesteps=TOTAL_TIMESTEPS, progress_bar=True)
     last_solution_info = delivery.last_solution_info.copy()
     model.save("ppo_delivery")
     model = PPO.load("ppo_delivery")
@@ -645,7 +646,7 @@ Solving with time limit of 10 seconds
     input('Enter to continue...')
 
 
-
-
-
+    # sac, td3, ddpg: The algorithm only supports (<class 'gymnasium.spaces.box.Box'>,) as action spaces but Discrete(15) was provided
+    # this could be by-passed easily by converting the action to one-hot vector or an integer but it is not worth trying
+    # since the algorithms are simply not designed for discrete action spaces
 
