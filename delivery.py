@@ -472,9 +472,9 @@ if __name__ == "__main__":
             break
     """
     # initialization
-    N_STOPS = 15
+    N_STOPS = 100
     N_MOVE_THRESHOLD = N_STOPS * 10
-    TOTAL_TIMESTEPS = 1_000
+    TOTAL_TIMESTEPS = 10_000
 
     print('='*25 + 'Initialization' + '='*25)
     delivery = Delivery(n_stops=N_STOPS, gen_seed=42, gym_seed=42, max_env_size=1000)
@@ -582,7 +582,8 @@ Solving with time limit of 10 seconds
     # dqn
     print('='*25 + 'DQN' + '='*25)
     observation, info = delivery.reset()
-    model = DQN("MultiInputPolicy", delivery, verbose=1, learning_rate=0.01)
+    model = DQN("MultiInputPolicy", delivery, verbose=1, learning_rate=0.001)
+    # model = DQN("MultiInputPolicy", delivery, verbose=1)
     model.learn(total_timesteps=TOTAL_TIMESTEPS, progress_bar=True)
     last_solution_info = delivery.last_solution_info.copy()
     model.save("dqn_delivery")
@@ -616,7 +617,8 @@ Solving with time limit of 10 seconds
     # sometimes ppo does not give a solution at all
     print('='*25 + 'PPO' + '='*25)
     observation, info = delivery.reset()
-    model = PPO("MultiInputPolicy", delivery, verbose=1, learning_rate=0.01)
+    model = PPO("MultiInputPolicy", delivery, verbose=1, learning_rate=0.001)
+    # model = PPO("MultiInputPolicy", delivery, verbose=1)
     model.learn(total_timesteps=TOTAL_TIMESTEPS, progress_bar=True)
     last_solution_info = delivery.last_solution_info.copy()
     model.save("ppo_delivery")
