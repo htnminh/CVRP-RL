@@ -479,7 +479,7 @@ if __name__ == "__main__":
     TOTAL_TIMESTEPS = 500
 
     print('='*25 + 'Initialization' + '='*25)
-    delivery = Delivery(n_stops=N_STOPS, gen_seed=42, gym_seed=42, max_env_size=1000)
+    delivery = Delivery(n_stops=N_STOPS, gen_seed=20, gym_seed=20, max_env_size=1000)
     
     # quick warning
     warnings.warn(

@@ -61,9 +61,9 @@ if __name__ == '__main__':
     )
     model_names = [model_name for _, model_name in models]
 
-    TOTAL_TIMESTEPS_LIST = [250, 500, 1_000, 5_000, 10_000, 50_000, 100_000]
+    TOTAL_TIMESTEPS_LIST = [250, 500, 1_000, 5_000, 10_000, 50_000]
     # TOTAL_TIMESTEPS_LIST = [250, 500]  # test
-    N_STOPS_LIST = [5, 10, 15, 20, 40, 50, 100]
+    N_STOPS_LIST = [5, 6, 7, 8, 9, 10, 12, 15, 20]
     # N_STOPS_LIST = [5, 10]  # test
 
     # train and save results of each model
