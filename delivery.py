@@ -19,7 +19,7 @@ from ortools.constraint_solver import pywrapcp
 import gymnasium
 from gymnasium import spaces
 
-from stable_baselines3 import DQN, A2C, PPO, SAC, TD3, DDPG, HerReplayBuffer
+from stable_baselines3 import DQN, A2C, PPO
 
 import torch
 from torch import tensor
@@ -27,7 +27,7 @@ from torch import tensor
 
 
 class Delivery(gymnasium.Env):
-    def __init__(self, n_stops=10, max_demand=10, max_vehicle_cap=30, max_env_size=1_000,
+    def __init__(self, n_stops=10, max_demand=10, max_vehicle_cap=30, max_env_size=1_0000_000,
                  gen_seed=None, gym_seed=None, print_input=True, print_terminated=True) -> None:
         # Print input info
         if print_input:
@@ -53,6 +53,7 @@ class Delivery(gymnasium.Env):
 
         # Gymnasium env
         self.observation, self.info = self.reset()
+
 
     def _generate_demands_and_vehicle_caps(self):
         demands = np.append([0], randint(1, self.max_demand + 1, size=self.n_stops - 1))
@@ -474,7 +475,7 @@ if __name__ == "__main__":
             break
     """
     # initialization
-    N_STOPS = 20
+    N_STOPS = 10
     N_MOVE_THRESHOLD = N_STOPS * 100
     TOTAL_TIMESTEPS = 500
 
