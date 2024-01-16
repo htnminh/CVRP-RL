@@ -27,7 +27,7 @@ from torch import tensor
 
 
 class Delivery(gymnasium.Env):
-    def __init__(self, n_stops=10, max_demand=10, max_vehicle_cap=30, max_env_size=1_000_000,
+    def __init__(self, n_stops=10, max_demand=10, max_vehicle_cap=30, max_env_size=1_000,
                  gen_seed=None, gym_seed=None, print_input=True, print_terminated=True) -> None:
         # Print input info
         if print_input:
